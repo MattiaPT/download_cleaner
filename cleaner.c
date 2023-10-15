@@ -15,8 +15,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #define DEFAULT_FOLDER "/Downloads"
+
+#define CRITERION(metadata) (int)metadata.st_mtime
+#define MAX_LIFETIME_S 604800
 
 int main(int argc, char *argv[]) {
   char folder_to_clean[256] = DEFAULT_FOLDER;
@@ -26,18 +30,26 @@ int main(int argc, char *argv[]) {
   DIR *d = opendir(folder_to_clean);
   struct dirent *dir;
 
+  const int current_time = (int)time(NULL);
+
   if (d) {
     char base[256];
     while ((dir = readdir(d)) != NULL) {
+      base[0] = '\0';
       strcpy(base, folder_to_clean);
       strcat(base, dir->d_name);
 
       struct stat metadata;
-      stat(folder_to_clean, &metadata);
-      printf("%llu\n\n\n", (long long)metadata.st_mtime);
-      base[0] = '\0';
+      stat(base, &metadata);
+
+      int timestamp = CRITERION(metadata);
+
+      if (timestamp + MAX_LIFETIME_S < current_time) {
+        printf("%d to delete: %s\n", timestamp, base);
+      }
     }
     closedir(d);
   }
+
   return 0;
 }
