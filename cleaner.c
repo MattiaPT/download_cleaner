@@ -25,7 +25,7 @@
 
 #define MIN(a, b) ((a < b) ? a : b)
 
-#define DEFAULT_FOLDER "/Downloads"
+#define DEFAULT_FOLDER "Downloads/"
 
 #define CRITERION(metadata) ((int)metadata.st_mtime)
 #define MAX_LIFETIME_S 604800
