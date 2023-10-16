@@ -21,14 +21,34 @@
 #include <time.h>
 #include <unistd.h>
 
+#define DEFAULT_FOLDER "Downloads/"
+#define MAX_LIFETIME_S 604800
+
 #define D_TYPE 4
 
 #define MIN(a, b) ((a < b) ? a : b)
-
-#define DEFAULT_FOLDER "Downloads/"
-
 #define CRITERION(metadata) ((int)metadata.st_mtime)
-#define MAX_LIFETIME_S 604800
+
+#define PRINT_LOG(msg, var)                                                    \
+  do {                                                                         \
+    time_t rawtime;                                                            \
+    time(&rawtime);                                                            \
+    char *time_string = ctime(&rawtime);                                       \
+    char *end = strrchr(time_string, '\n');                                    \
+    *end = '\0';                                                               \
+    printf("[%s] %s %s\n", time_string, msg, var);                             \
+  } while (0)
+
+#define PRINT_SUCCESS(counter, location)                                       \
+  do {                                                                         \
+    time_t rawtime;                                                            \
+    time(&rawtime);                                                            \
+    char *time_string = ctime(&rawtime);                                       \
+    char *end = strrchr(time_string, '\n');                                    \
+    *end = '\0';                                                               \
+    printf("[%s] Successfully removed %d element(s) from  %s\n", time_string,  \
+           counter, location);                                                 \
+  } while (0)
 
 int main(int argc, char *argv[]) {
   char folder_to_clean[256] = DEFAULT_FOLDER;
@@ -41,7 +61,7 @@ int main(int argc, char *argv[]) {
   const int current_time = (int)time(NULL);
 
   if (!d) {
-    printf("Failed to open directory at %s\n", folder_to_clean);
+    PRINT_LOG("Failed to open directory at", folder_to_clean);
     return -1;
   }
 
@@ -71,12 +91,12 @@ int main(int argc, char *argv[]) {
     if (timestamp + MAX_LIFETIME_S < current_time) {
       if (dir->d_type == D_TYPE) {
         if (rmdir_recursively(base) == -1) {
-          printf("Failed removal of directory: %s\n", base);
+          PRINT_LOG("Failed removal of directory:", base);
           continue;
         }
       } else {
         if (remove(base) == -1) {
-          printf("Failed removal of file: %s\n", base);
+          PRINT_LOG("Failed removal of file:", base);
           continue;
         }
       }
@@ -84,8 +104,11 @@ int main(int argc, char *argv[]) {
     }
   }
   closedir(d);
-  printf("Successfully removed %d elements from %s\n", counter,
-         folder_to_clean);
+  if (counter != 0) {
+    PRINT_SUCCESS(counter, folder_to_clean);
+  } else {
+    PRINT_LOG("No elements to remove have been found in", folder_to_clean);
+  }
 
   return 0;
 }
@@ -95,8 +118,8 @@ int rmdir_recursively(const char *directory_location) {
   struct dirent *dir;
 
   if (!d) {
-    printf("Failed to open directory at %s:\n\t%s\n", directory_location,
-           strerror(errno));
+    PRINT_LOG("Failed to open directory at", directory_location);
+    PRINT_LOG("->", strerror(errno));
     return -1;
   }
 
@@ -125,7 +148,7 @@ int most_recent_modification(const char *directory_location) {
   struct dirent *dir;
 
   if (!d) {
-    printf("Failed to open directory at %s\n", directory_location);
+    PRINT_LOG("Failed to open directory at", directory_location);
     return -1;
   }
 
