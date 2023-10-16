@@ -12,6 +12,8 @@
 #include "cleaner.h"
 
 #include <dirent.h>
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,9 +21,13 @@
 #include <time.h>
 #include <unistd.h>
 
+#define D_TYPE 4
+
+#define MIN(a, b) ((a < b) ? a : b)
+
 #define DEFAULT_FOLDER "/Downloads"
 
-#define CRITERION(metadata) (int)metadata.st_mtime
+#define CRITERION(metadata) ((int)metadata.st_mtime)
 #define MAX_LIFETIME_S 604800
 
 int main(int argc, char *argv[]) {
@@ -48,18 +54,31 @@ int main(int argc, char *argv[]) {
     base[0] = '\0';
     strcpy(base, folder_to_clean);
     strcat(base, dir->d_name);
+    if (dir->d_type == D_TYPE) {
+      strcat(base, "/");
+    }
 
-    struct stat metadata;
-    stat(base, &metadata);
+    int timestamp;
 
-    int timestamp = CRITERION(metadata);
+    if (dir->d_type == D_TYPE) {
+      timestamp = most_recent_modification(base);
+    } else {
+      struct stat metadata;
+      stat(base, &metadata);
+      timestamp = CRITERION(metadata);
+    }
 
     if (timestamp + MAX_LIFETIME_S < current_time) {
-      // printf("removing: %s\n", dir->d_name);
-      if (remove(base) != 0) {
-        strcat(base, "/");
-        printf("failed at: %s\n", base);
-        rmdir_recursively(base);
+      if (dir->d_type == D_TYPE) {
+        if (rmdir_recursively(base) == -1) {
+          printf("Failed removal of directory: %s\n", base);
+          continue;
+        }
+      } else {
+        if (remove(base) == -1) {
+          printf("Failed removal of file: %s\n", base);
+          continue;
+        }
       }
       counter++;
     }
@@ -76,7 +95,8 @@ int rmdir_recursively(const char *directory_location) {
   struct dirent *dir;
 
   if (!d) {
-    printf("Failed to open directory at %s\n", directory_location);
+    printf("Failed to open directory at %s:\n\t%s\n", directory_location,
+           strerror(errno));
     return -1;
   }
 
@@ -98,4 +118,36 @@ int rmdir_recursively(const char *directory_location) {
   rmdir(directory_location);
 
   return 0;
+}
+
+int most_recent_modification(const char *directory_location) {
+  DIR *d = opendir(directory_location);
+  struct dirent *dir;
+
+  if (!d) {
+    printf("Failed to open directory at %s\n", directory_location);
+    return -1;
+  }
+
+  int most_recent_mod = INT_MAX;
+  char base[256];
+  while ((dir = readdir(d)) != NULL) {
+    if (strcmp(dir->d_name, "..") == 0 || strcmp(dir->d_name, ".") == 0) {
+      continue;
+    }
+    base[0] = '\n';
+    strcpy(base, directory_location);
+    strcat(base, dir->d_name);
+    if (dir->d_type == D_TYPE) {
+      strcat(base, "/");
+      most_recent_mod = MIN(most_recent_mod, most_recent_modification(base));
+    } else {
+      struct stat metadata;
+      stat(base, &metadata);
+      most_recent_mod = MIN(most_recent_mod, CRITERION(metadata));
+    }
+  }
+
+  closedir(d);
+  return most_recent_mod;
 }
